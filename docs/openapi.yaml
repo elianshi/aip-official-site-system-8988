@@ -1,0 +1,175 @@
+openapi: 3.0.3
+info:
+  title: 官网内容管理系统 Public API
+  version: 0.1.0
+  description: Sprint 1 只读接口。公开数据来自当前发布版本；无管理写入或登录接口。所有 GET 同时支持 HEAD（无响应体）。OPTIONS 仅处理允许来源的 GET/HEAD 预检。
+servers:
+  - url: http://localhost:8080
+paths:
+  /healthz:
+    get:
+      operationId: liveness
+      summary: 进程存活，不查询数据库
+      responses:
+        '200':
+          description: 进程正常
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: {type: string, enum: [ok]}
+  /readyz:
+    get:
+      operationId: readiness
+      summary: 检查数据库和内容表
+      responses:
+        '200':
+          description: 数据库与内容表可用
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: {type: string, enum: [ready]}
+        '503': {$ref: '#/components/responses/Error'}
+  /api/v1/site:
+    get:
+      operationId: getPublishedSite
+      summary: 获取完整发布快照
+      responses:
+        '200':
+          description: 当前发布版本；每个区块始终为数组
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: {$ref: '#/components/schemas/Site'}
+        '404': {$ref: '#/components/responses/Error'}
+        '405': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  /api/v1/contents/{kind}:
+    get:
+      operationId: listPublishedContent
+      summary: 按位置及 ID 升序返回指定分类的启用内容
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: {$ref: '#/components/schemas/Kind'}
+      responses:
+        '200':
+          description: 已发布分类列表，可能为空
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, release_id, version]
+                properties:
+                  data: {$ref: '#/components/schemas/ContentList'}
+                  release_id: {type: string, format: uuid}
+                  version: {type: integer, minimum: 1}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '405': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+components:
+  responses:
+    Error:
+      description: 结构化错误；具体 code 与状态码对应关系见 backend-api.md
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error]
+            properties:
+              error:
+                type: object
+                required: [code, message]
+                properties:
+                  code:
+                    type: string
+                    enum: [invalid_kind, origin_not_allowed, not_found, not_published, method_not_allowed, not_ready, content_unavailable]
+                  message: {type: string}
+  schemas:
+    Kind:
+      type: string
+      enum: [banners, navigation, heroes, products, solutions, cases, services, security, pricing, resources, footer]
+    Image:
+      type: object
+      required: [url, alt]
+      properties:
+        url: {type: string, description: 可替换图片 URL}
+        alt: {type: string}
+    Link:
+      type: object
+      required: [label, url]
+      properties:
+        label: {type: string}
+        url: {type: string, description: 支持站内相对路径与外链}
+        children:
+          type: array
+          items: {$ref: '#/components/schemas/Link'}
+    Brand:
+      type: object
+      required: [name, tagline]
+      properties:
+        name: {type: string}
+        tagline: {type: string}
+        logo: {$ref: '#/components/schemas/Image'}
+    Price:
+      type: object
+      required: [amount_minor, currency, interval]
+      properties:
+        amount_minor: {type: integer, format: int64, description: 货币最小单位整数金额，例如人民币分}
+        currency: {type: string, example: CNY}
+        interval: {type: string, example: month}
+    Content:
+      type: object
+      required: [id, kind, title, summary, position, links, features]
+      properties:
+        id: {type: string, format: uuid}
+        kind: {$ref: '#/components/schemas/Kind'}
+        title: {type: string, minLength: 1, maxLength: 256}
+        summary: {type: string}
+        position: {type: integer, minimum: 0}
+        image: {$ref: '#/components/schemas/Image'}
+        cta: {$ref: '#/components/schemas/Link'}
+        links:
+          type: array
+          items: {$ref: '#/components/schemas/Link'}
+        features:
+          type: array
+          items: {type: string}
+        price: {$ref: '#/components/schemas/Price'}
+    ContentList:
+      type: array
+      items: {$ref: '#/components/schemas/Content'}
+    Site:
+      type: object
+      required: [release_id, version, published_at, brand, sections]
+      properties:
+        release_id: {type: string, format: uuid}
+        version: {type: integer, minimum: 1}
+        published_at: {type: string, format: date-time}
+        brand: {$ref: '#/components/schemas/Brand'}
+        sections:
+          type: object
+          additionalProperties: false
+          required: [banners, navigation, heroes, products, solutions, cases, services, security, pricing, resources, footer]
+          properties:
+            banners: {$ref: '#/components/schemas/ContentList'}
+            navigation: {$ref: '#/components/schemas/ContentList'}
+            heroes: {$ref: '#/components/schemas/ContentList'}
+            products: {$ref: '#/components/schemas/ContentList'}
+            solutions: {$ref: '#/components/schemas/ContentList'}
+            cases: {$ref: '#/components/schemas/ContentList'}
+            services: {$ref: '#/components/schemas/ContentList'}
+            security: {$ref: '#/components/schemas/ContentList'}
+            pricing: {$ref: '#/components/schemas/ContentList'}
+            resources: {$ref: '#/components/schemas/ContentList'}
+            footer: {$ref: '#/components/schemas/ContentList'}
